@@ -1,0 +1,19 @@
+services:
+  pgport:
+    build: .
+    image: pgport:latest
+    container_name: pgport
+    restart: unless-stopped
+    env_file: .env
+    ports:
+      # Change the left side if 8085 is taken. Drop this block entirely if NPMplus
+      # reaches the container over a shared Docker network instead.
+      - "8085:8080"
+    # If your Twitch bot's Postgres runs in another compose project, join its network
+    # so you can use its service name as the Host in the connection string:
+    # networks:
+    #   - pgport_default
+
+# networks:
+#   pgport_default:
+#     external: true

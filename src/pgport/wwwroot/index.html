@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>AntonLabs - Query Dashboard</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 16 16'><rect width='16' height='16' rx='3' fill='%236d5dfc'/><path d='M4 5h8M4 8h8M4 11h5' stroke='white' stroke-width='1.6' stroke-linecap='round'/></svg>">
+  <link rel="stylesheet" href="app.css">
+</head>
+<body>
+  <header class="topbar">
+    <h1>AntonLabs - Query Dashboard</h1>
+    <label class="db-picker">
+      <span>Database</span>
+      <select id="database" aria-label="Database"></select>
+    </label>
+  </header>
+
+  <main>
+    <section class="editor-panel">
+      <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off"
+        placeholder="SELECT username, COUNT(*) AS messages&#10;FROM messages&#10;GROUP BY username&#10;ORDER BY messages DESC;"></textarea>
+
+      <div class="toolbar">
+        <button id="run" class="primary" type="button">Run <kbd>Ctrl ↵</kbd></button>
+        <button id="cancel" type="button" hidden>Cancel</button>
+        <label class="page-size">
+          Rows per page
+          <select id="pageSize">
+            <option>50</option>
+            <option selected>100</option>
+            <option>250</option>
+            <option>500</option>
+            <option>1000</option>
+          </select>
+        </label>
+        <span class="spacer"></span>
+        <label class="format-Select">
+          Download Format 
+          <select id="downloadFormat">
+            <option selected>CSV</option>
+            <option>JSON</option>
+            <option>XML</option>
+          </select>
+        </label>
+        <button id="downloadData" type="button">
+          Download
+        </button>
+      </div>
+      <p class="tip">Runs the selected text if you've highlighted part of the editor. Queries run read-only.</p>
+    </section>
+
+    <section class="results-panel">
+      <div id="status" class="status" role="status" aria-live="polite"></div>
+      <div id="error" class="error" role="alert" hidden></div>
+      <div class="table-wrap" id="tableWrap" hidden>
+        <table id="results"></table>
+      </div>
+      <nav class="pager" id="pager" hidden>
+        <button id="prev" type="button">‹ Prev</button>
+        <span id="pageLabel"></span>
+        <button id="next" type="button">Next ›</button>
+      </nav>
+    </section>
+  </main>
+
+  <script src="app.js"></script>
+</body>
+</html>
