@@ -12,6 +12,9 @@ A self-hosted, browser-based SQL console for PostgreSQL. You run a query, page t
 - Error messages show the Postgres error with its line, column and a caret under the problem spot.
 - **Export to CSV, JSON or XML.** Pick a format from the *Download Format* dropdown and click **Download**. Exports stream straight to disk, so memory stays flat for any size. The query is dry-run first, so SQL errors show up in the UI instead of as a broken download.
 - Cancel button. Closing the tab also cancels the query on the server.
+- **Table browser** (sidebar → *Tables*): every schema, table, view and materialized view with its columns, types and an estimated row count. Click a name to insert it at the cursor (quoted when needed), or ▶ to query the table. Tables the read-only role can't `SELECT` from appear in grey italics, which usually means a missing `GRANT`.
+- **Saved queries** (sidebar → *Saved*): <kbd>Ctrl</kbd>/<kbd>⌘</kbd>+<kbd>S</kbd> or **Save** stores the whole editor together with the selected database. If the query starts with a `-- comment`, that becomes the suggested name. After you open a saved query, the toolbar shows its name, with a ● once you've edited it. Save again to update it, or *Save as new* to make a copy. Saved queries are stored **on the server** in `saved-queries.json`, so everyone who can reach PgPort shares them.
+- **Query history** (sidebar → *History*): the last 200 queries you ran, with row count, time and whether they failed. Running the same query again moves it to the top. History is stored **in your browser** (`localStorage`), not on the server.
 
 ## Export formats
 
@@ -41,7 +44,7 @@ cp .env.example .env        # then edit the connection string(s)
 docker compose up -d --build
 ```
 
-Open <http://localhost:8085>. After changing any code (including `wwwroot/` files, which are baked into the image), rebuild with `docker compose up -d --build` and hard-refresh the browser (<kbd>Ctrl</kbd>+<kbd>F5</kbd>). After changing only `.env`, run `docker compose up -d --force-recreate`.
+Open <http://localhost:8085>. Saved queries are kept in the `pgport-data` volume (mounted at `/app/data`), so they survive rebuilds. Back them up with `docker compose cp pgport:/app/data/saved-queries.json .`. After changing any code (including `wwwroot/` files, which are baked into the image), rebuild with `docker compose up -d --build` and hard-refresh the browser (<kbd>Ctrl</kbd>+<kbd>F5</kbd>). After changing only `.env`, run `docker compose up -d --force-recreate`.
 
 Databases are configured through environment variables. Each variable is named `Databases__<Name>`. `<Name>` is **only the label** shown in the database picker; `Database=` in the connection string decides which database you connect to:
 
@@ -74,6 +77,8 @@ dotnet run
 | `relation "public" does not exist` | `public` is a schema, not a table. Query `public.<table>`. List tables with `SELECT table_schema, table_name FROM information_schema.tables WHERE table_schema NOT IN ('pg_catalog','information_schema');` |
 | Not sure which database you're on | `SELECT current_database(), current_user, inet_server_addr();` |
 | Download shows **"Failed – network error"** | The server hit an error after the download started. Run `docker compose logs pgport` right after to see the exception. Common causes: the export time limit was reached (raise `Query__ExportTimeoutSeconds`) or the database connection dropped. |
+| Saving a query fails with *Couldn't write the saved queries file* | The container can't write to `/app/data`. Use the `pgport-data` volume from `docker-compose.yml`. If you use a bind mount instead, the host folder must be writable by the container's `app` user (UID 1654). |
+| Table browser is empty or missing a schema | The role needs `USAGE` on the schema. Tables it can't read still appear, in grey. |
 | Export returns 400 | The red error box shows the reason: a SQL error, more than one statement, or an unsupported format (only `csv`, `json`, `xml`). |
 
 ## API
@@ -85,6 +90,11 @@ dotnet run
 | POST | `/api/query` | `{ database, sql, page, pageSize }` | Returns columns, rows, `hasMore` and timing |
 | POST | `/api/export/{format}` | `{ database, sql }` | `format` is `csv`, `json` or `xml` (case-insensitive). Validates the query and returns a one-time `{ url }` that is valid for 2 minutes |
 | GET | `/api/export/{format}/{token}` | | Streams the file |
+| GET | `/api/schema?database=` | | Schemas → tables/views → columns. Partitions are hidden; their parent is listed |
+| GET | `/api/saved-queries` | | All saved queries, sorted by name |
+| POST | `/api/saved-queries` | `{ name, database, sql }` | Returns the new saved query (with `id`) |
+| PUT | `/api/saved-queries/{id}` | `{ name, database, sql }` | 404 if it was deleted |
+| DELETE | `/api/saved-queries/{id}` | | 204, or 404 if it was already gone |
 
 `SELECT`, `WITH`, `VALUES` and `TABLE` statements are paged by wrapping them as `SELECT * FROM (<your query>) LIMIT … OFFSET …`. Other read-only statements (`EXPLAIN`, `SHOW`) run as written and show only the first page.
 
@@ -98,12 +108,14 @@ dotnet run
 | `MaxPageSize` | 1000 | |
 | `PreviewMaxCellLength` | 2000 | Long text is cut off in the grid only. Exports are never cut off. |
 
+`Storage__DataDirectory` (default `data`, which is `/app/data` in the container) sets where `saved-queries.json` is written. Relative paths are resolved from the app folder. The resolved path is logged at startup.
+
 ## Project layout
 
 ```
 src/pgport/
   Program.cs                  service wiring + endpoint registration
-  Endpoints/                  /api/databases, /api/query, /api/export/{format}
+  Endpoints/                  /api/databases, /api/query, /api/export/{format}, /api/schema, /api/saved-queries
   Services/
     DatabaseRegistry.cs       one pooled NpgsqlDataSource per configured DB
     QueryRunner.cs            read-only transaction + timeout + rollback
@@ -113,6 +125,8 @@ src/pgport/
     ExportWriters.cs          CSV / JSON / XML writers (ExportWriter.Create picks one)
     CsvFormat.cs              RFC 4180 escaping
     ExportTicketStore.cs      one-time download tokens
+    SchemaBrowser.cs          one pg_catalog query -> schemas/tables/columns
+    SavedQueryStore.cs        saved-queries.json (in memory, atomic rewrite on change)
   wwwroot/                    index.html, app.js, app.css
 docs/readonly-role.sql
 ```
@@ -126,6 +140,9 @@ Controls in `index.html` have an `id`. `app.js` looks them up in the `els` objec
 | Run / Ctrl+Enter / Prev / Next / Rows per page | `runFromEditor()` / `goToPage()` → `execute()` | `POST /api/query` → `QueryEndpoints.RunQueryAsync` |
 | Database dropdown | `loadDatabases()` | `GET /api/databases` |
 | Download Format + Download | `downloadData(els.downloadFormat.value)` | `POST /api/export/{format}` → `GET /api/export/{format}/{token}` in `ExportEndpoints.cs` |
+| Sidebar → Tables | `loadSchema()` → `renderSchema()` (cached per database; ↻ reloads) | `GET /api/schema` → `SchemaEndpoints.GetSchemaAsync` |
+| Save / Ctrl+S, sidebar → Saved | `openSaveDialog()` → `saveQuery()`, `loadSavedQueries()`, `deleteSaved()` | `/api/saved-queries` in `SavedQueryEndpoints.cs` |
+| Sidebar → History | `addHistory()` (called from `execute()` for fresh runs, not paging) | None (browser `localStorage`) |
 
 Pass a function to `addEventListener`, for example `() => downloadData(els.downloadFormat.value)`. Passing `downloadData(...)` directly calls it once at page load instead of on click.
 
@@ -135,6 +152,6 @@ Add a class deriving from `ExportWriter` in `ExportWriters.cs`, and add the form
 
 ## Roadmap
 
-- **V2:** ~~JSON export~~ ✅, ~~XML export~~ ✅, XLSX export, saved queries, query history, schema/table browser
+- **V2:** ~~JSON export~~ ✅, ~~XML export~~ ✅, XLSX export, ~~saved queries~~ ✅, ~~query history~~ ✅, ~~schema/table browser~~ ✅
 - **V3:** visual query builder, parameters, charts, Twitch dashboards
-- **V4:** authentication, roles, audit log
+- **V4:** authentication, roles, audit log (saved queries will need per-user ownership once there are users)

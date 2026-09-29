@@ -9,10 +9,16 @@ services:
       # Change the left side if 8085 is taken. Drop this block entirely if NPMplus
       # reaches the container over a shared Docker network instead.
       - "8085:8080"
+    volumes:
+      # Saved queries (saved-queries.json). Query history is kept in each browser instead.
+      - pgport-data:/app/data
     # If your Twitch bot's Postgres runs in another compose project, join its network
     # so you can use its service name as the Host in the connection string:
     # networks:
     #   - pgport_default
+
+volumes:
+  pgport-data:
 
 # networks:
 #   pgport_default:

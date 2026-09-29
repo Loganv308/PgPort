@@ -25,3 +25,24 @@ public sealed record ApiError(
     int? Line = null,
     int? Column = null,
     string? Near = null);
+
+public sealed record SavedQuery(
+    string Id,
+    string Name,
+    string? Database,
+    string Sql,
+    DateTimeOffset CreatedAt,
+    DateTimeOffset UpdatedAt);
+
+public sealed record SavedQueryRequest(string? Name, string? Database, string? Sql);
+
+public sealed record SchemaInfo(string Name, IReadOnlyList<TableInfo> Tables);
+
+public sealed record TableInfo(
+    string Name,
+    string Kind,
+    long? EstimatedRows,
+    bool CanSelect,
+    IReadOnlyList<TableColumn> Columns);
+
+public sealed record TableColumn(string Name, string Type, bool NotNull);

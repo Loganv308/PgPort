@@ -20,6 +20,9 @@ EXPOSE 8080
 
 COPY --from=build /app/publish .
 
+# Saved queries live here. Created up front so a fresh named volume inherits the app user's ownership.
+RUN mkdir -p /app/data && chown app:app /app/data
+
 # The aspnet image ships a non-root "app" user.
 USER app
 

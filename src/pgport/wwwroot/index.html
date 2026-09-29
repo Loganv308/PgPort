@@ -9,6 +9,7 @@
 </head>
 <body>
   <header class="topbar">
+    <button id="toggleSidebar" class="sidebar-toggle" type="button" aria-controls="sidebar" aria-expanded="true" title="Show or hide the sidebar">☰</button>
     <h1>AntonLabs - Query Dashboard</h1>
     <label class="db-picker">
       <span>Database</span>
@@ -16,53 +17,106 @@
     </label>
   </header>
 
-  <main>
-    <section class="editor-panel">
-      <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off"
-        placeholder="SELECT username, COUNT(*) AS messages&#10;FROM messages&#10;GROUP BY username&#10;ORDER BY messages DESC;"></textarea>
-
-      <div class="toolbar">
-        <button id="run" class="primary" type="button">Run <kbd>Ctrl ↵</kbd></button>
-        <button id="cancel" type="button" hidden>Cancel</button>
-        <label class="page-size">
-          Rows per page
-          <select id="pageSize">
-            <option>50</option>
-            <option selected>100</option>
-            <option>250</option>
-            <option>500</option>
-            <option>1000</option>
-          </select>
-        </label>
-        <span class="spacer"></span>
-        <label class="format-Select">
-          Download Format 
-          <select id="downloadFormat">
-            <option selected>CSV</option>
-            <option>JSON</option>
-            <option>XML</option>
-          </select>
-        </label>
-        <button id="downloadData" type="button">
-          Download
-        </button>
+  <div class="layout">
+    <aside id="sidebar" class="sidebar">
+      <div class="tabs" role="tablist">
+        <button type="button" role="tab" data-tab="tables" aria-selected="true">Tables</button>
+        <button type="button" role="tab" data-tab="saved" aria-selected="false">Saved</button>
+        <button type="button" role="tab" data-tab="history" aria-selected="false">History</button>
       </div>
-      <p class="tip">Runs the selected text if you've highlighted part of the editor. Queries run read-only.</p>
-    </section>
 
-    <section class="results-panel">
-      <div id="status" class="status" role="status" aria-live="polite"></div>
-      <div id="error" class="error" role="alert" hidden></div>
-      <div class="table-wrap" id="tableWrap" hidden>
-        <table id="results"></table>
-      </div>
-      <nav class="pager" id="pager" hidden>
-        <button id="prev" type="button">‹ Prev</button>
-        <span id="pageLabel"></span>
-        <button id="next" type="button">Next ›</button>
-      </nav>
-    </section>
-  </main>
+      <section class="tab-panel" data-panel="tables" role="tabpanel">
+        <div class="panel-head">
+          <input id="schemaFilter" type="search" placeholder="Filter tables…" aria-label="Filter tables" autocomplete="off">
+          <button id="schemaRefresh" class="icon-btn visible" type="button" title="Reload tables" aria-label="Reload tables">↻</button>
+        </div>
+        <div id="schemaStatus" class="panel-status"></div>
+        <ul id="schemaTree" class="panel-list tree"></ul>
+      </section>
+
+      <section class="tab-panel" data-panel="saved" role="tabpanel" hidden>
+        <div class="panel-head">
+          <input id="savedFilter" type="search" placeholder="Filter saved queries…" aria-label="Filter saved queries" autocomplete="off">
+        </div>
+        <div id="savedStatus" class="panel-status"></div>
+        <ul id="savedList" class="panel-list"></ul>
+      </section>
+
+      <section class="tab-panel" data-panel="history" role="tabpanel" hidden>
+        <div class="panel-head">
+          <input id="historyFilter" type="search" placeholder="Filter history…" aria-label="Filter history" autocomplete="off">
+          <button id="historyClear" type="button" title="Clear all history">Clear</button>
+        </div>
+        <div class="panel-status">Stored in this browser only.</div>
+        <ul id="historyList" class="panel-list"></ul>
+      </section>
+    </aside>
+
+    <main>
+      <section class="editor-panel">
+        <textarea id="sql" spellcheck="false" autocomplete="off" autocapitalize="off"
+          placeholder="SELECT username, COUNT(*) AS messages&#10;FROM messages&#10;GROUP BY username&#10;ORDER BY messages DESC;"></textarea>
+
+        <div class="toolbar">
+          <button id="run" class="primary" type="button">Run <kbd>Ctrl ↵</kbd></button>
+          <button id="cancel" type="button" hidden>Cancel</button>
+          <button id="save" type="button" title="Save this query (Ctrl+S)">Save</button>
+          <span id="savedLabel" class="saved-label" hidden></span>
+          <label class="page-size">
+            Rows per page
+            <select id="pageSize">
+              <option>50</option>
+              <option selected>100</option>
+              <option>250</option>
+              <option>500</option>
+              <option>1000</option>
+            </select>
+          </label>
+          <span class="spacer"></span>
+          <label class="format-Select">
+            Download Format
+            <select id="downloadFormat">
+              <option selected>CSV</option>
+              <option>JSON</option>
+              <option>XML</option>
+            </select>
+          </label>
+          <button id="downloadData" type="button">
+            Download
+          </button>
+        </div>
+        <p class="tip">Runs the selected text if you've highlighted part of the editor. Queries run read-only. <kbd>Ctrl S</kbd> saves the query.</p>
+      </section>
+
+      <section class="results-panel">
+        <div id="status" class="status" role="status" aria-live="polite"></div>
+        <div id="error" class="error" role="alert" hidden></div>
+        <div class="table-wrap" id="tableWrap" hidden>
+          <table id="results"></table>
+        </div>
+        <nav class="pager" id="pager" hidden>
+          <button id="prev" type="button">‹ Prev</button>
+          <span id="pageLabel"></span>
+          <button id="next" type="button">Next ›</button>
+        </nav>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="saveDialog" aria-labelledby="saveTitle">
+    <h2 id="saveTitle">Save query</h2>
+    <label class="field">
+      Name
+      <input id="saveName" type="text" maxlength="200" autocomplete="off">
+    </label>
+    <p class="dialog-note">Saved with database <strong id="saveDb"></strong>. Saved queries are stored on the server and visible to everyone who can open PgPort.</p>
+    <div id="saveError" class="error" role="alert" hidden></div>
+    <div class="dialog-actions">
+      <button id="saveCancel" type="button">Cancel</button>
+      <button id="saveAsNew" type="button">Save as new</button>
+      <button id="saveUpdate" class="primary" type="button"></button>
+    </div>
+  </dialog>
 
   <script src="app.js"></script>
 </body>

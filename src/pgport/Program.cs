@@ -5,10 +5,12 @@ using PgPort.Services;
 var builder = WebApplication.CreateBuilder(args);
 
 builder.Services.Configure<QueryOptions>(builder.Configuration.GetSection(QueryOptions.SectionName));
+builder.Services.Configure<StorageOptions>(builder.Configuration.GetSection(StorageOptions.SectionName));
 builder.Services.AddSingleton<DatabaseRegistry>();
 builder.Services.AddSingleton<QueryRunner>();
 builder.Services.AddMemoryCache();
 builder.Services.AddSingleton<ExportTicketStore>();
+builder.Services.AddSingleton<SavedQueryStore>();
 
 builder.Services.ConfigureHttpJsonOptions(o =>
 {
@@ -31,6 +33,8 @@ else
     app.Logger.LogInformation("Configured databases: {Databases}", string.Join(", ", registry.Names));
 }
 
+app.Logger.LogInformation("Saved queries file: {Path}", app.Services.GetRequiredService<SavedQueryStore>().FilePath);
+
 app.UseDefaultFiles();
 app.UseStaticFiles();
 
@@ -38,5 +42,7 @@ app.MapGet("/api/health", () => Results.Ok(new { status = "ok" }));
 app.MapDatabaseEndpoints();
 app.MapQueryEndpoints();
 app.MapExportEndpoints();
+app.MapSchemaEndpoints();
+app.MapSavedQueryEndpoints();
 
 app.Run();
